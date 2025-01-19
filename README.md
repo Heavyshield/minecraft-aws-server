@@ -95,6 +95,11 @@ terraform destroy
 - Security Group (allows Minecraft port 25565 and SSH port 22)
 - EC2 t4g.small instance
 - Required networking components
+- AWS Lambda function (ec2_start_stop):
+  - Automatically stops the Minecraft server EC2 instance every night to save costs
+  - **Important**: If you want to keep your instance running 24/7, you should disable the Lambda scheduler
+  - This helps prevent unnecessary costs from instances left running overnight
+  - You can find the Lambda function in the AWS Console to modify its schedule or disable it
 
 ## Verify everything went well
 
@@ -108,7 +113,6 @@ terraform destroy
 
 ## Next steps
 - Implement user-data scripts to manage modded versions (e.g., DawnCraft).
-- Automate EC2 stop behavior, likely using a Lambda function with a schedule.
 - Set up a trigger to start the server, such as via SMS or email.
 - Add backup functionality to preserve server data.
 
