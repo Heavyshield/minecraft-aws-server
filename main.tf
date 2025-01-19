@@ -98,6 +98,121 @@ resource "aws_security_group" "minecraft_sg" {
   }
 }
 
+# Lambda role and policy for EC2 start/stop
+resource "aws_iam_role" "lambda_ec2_role" {
+  name = "lambda_ec2_start_stop_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# IAM policy for Lambda to start/stop EC2 instances
+resource "aws_iam_role_policy" "lambda_ec2_policy" {
+  name = "lambda_ec2_start_stop_policy"
+  role = aws_iam_role.lambda_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+          "ec2:DescribeInstances"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+# Lambda function for EC2 start/stop
+resource "aws_lambda_function" "ec2_start_stop" {
+  filename         = "src/lambda_function.zip"
+  function_name    = "ec2_start_stop"
+  role            = aws_iam_role.lambda_ec2_role.arn
+  handler         = "lambda_function.lambda_handler"
+  source_code_hash = filebase64sha256("src/lambda_function.zip")
+  runtime         = "python3.10"
+  timeout         = 10
+
+  environment {
+    variables = {
+      INSTANCE_ID = aws_instance.minecraft_server.id
+    }
+  }
+}
+
+resource "aws_iam_role" "scheduler_invoke_lambda_role" {
+  name = "scheduler-invoke-lambda-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "scheduler.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "scheduler_invoke_lambda_policy" {
+  name = "scheduler-invoke-lambda-policy"
+  role = aws_iam_role.scheduler_invoke_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          aws_lambda_function.ec2_start_stop.arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_scheduler_schedule" "daily_lambda_trigger" {
+  name                = "daily-ec2-stop"
+  schedule_expression = "cron(0 2 * * ? *)"
+  
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = aws_lambda_function.ec2_start_stop.arn
+    role_arn = aws_iam_role.scheduler_invoke_lambda_role.arn
+  }
+}
+
 # Create EC2 Instance
 resource "aws_instance" "minecraft_server" {
   ami           = "ami-0eddb054af3138dc5"

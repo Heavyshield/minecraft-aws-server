@@ -31,6 +31,9 @@ touch stop
 printf '#!/bin/bash\nkill -9 $(ps -ef | pgrep -f "java")' >> stop
 chmod +x stop
 sleep 1
+sudo wget https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.6-50.1.18/forge-1.20.6-50.1.18-installer.jar
+sudo java -jar forge-1.20.6-50.1.18-installer.jar --installServer
+sudo mkdir mods
 
 # Create SystemD Script to run Minecraft server jar on reboot
 cd /etc/systemd/system/
