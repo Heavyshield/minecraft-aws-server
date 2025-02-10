@@ -214,6 +214,40 @@ resource "aws_scheduler_schedule" "daily_lambda_trigger" {
 }
 
 # Create EC2 Instance
+resource "aws_iam_role" "minecraft_server_role" {
+  name = "minecraft-server-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.minecraft_bucket.arn,
+          "${aws_s3_bucket.minecraft_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "minecraft_server_profile" {
+  name = "minecraft-server-profile"
+  role = aws_iam_role.minecraft_server_role.name
+}
+
 resource "aws_instance" "minecraft_server" {
   ami           = "ami-0eddb054af3138dc5"
   instance_type = "t4g.small"
@@ -222,6 +256,7 @@ resource "aws_instance" "minecraft_server" {
   vpc_security_group_ids = [aws_security_group.minecraft_sg.id]
   key_name              = var.key_name
   user_data_base64      = base64encode(file("${path.module}/user-data.txt"))
+  iam_instance_profile  = aws_iam_instance_profile.minecraft_server_profile.name
 
   root_block_device {
     volume_size = 20
@@ -236,5 +271,19 @@ resource "aws_instance" "minecraft_server" {
 # Create Elastic IP Address
 resource "aws_eip" "minecraft-eip" {
   instance = aws_instance.minecraft_server.id
-  vpc = true
+  vpc      = true
+}
+
+# Create S3 bucket with random name
+resource "aws_s3_bucket" "minecraft_bucket" {
+  bucket = var.bucket_name
+  
+}
+
+# Enable bucket versioning
+resource "aws_s3_bucket_versioning" "versioning_example" {
+  bucket = aws_s3_bucket.minecraft_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }

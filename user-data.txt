@@ -39,8 +39,19 @@ sudo mkdir mods
 cd /etc/systemd/system/
 touch minecraft.service
 printf '[Unit]\nDescription=Minecraft Server on start up\nWants=network-online.target\n[Service]\nUser=minecraft\nWorkingDirectory=/opt/minecraft/server\nExecStart=/opt/minecraft/server/start\nStandardInput=null\n[Install]\nWantedBy=multi-user.target' >> minecraft.service
+
+# Create SystemD Script to backup Minecraft server on stopped / termination >>>>>>>>>>>>>>> s3 bucket path should be updated with your bucket <<<<<<<<<<<<<<<<<<<<<<<
+cd /opt/scripts/
+touch shutdown-script.sh
+printf '#!/bin/bash\necho "Instance is shutting down at $(date)" >> /var/log/shutdown.log\n# Sync files to S3\nzip -r backup.zip /opt/minecraft/server/ \naws s3 cp backup.zip s3://minecraft-bucket-60328/backup.zip'
+chmod +x /opt/scripts/shutdown-script.sh
+cd /etc/systemd/system/
+touch shutdown-script.service
+printf '[Unit]\nDescription=Run script on instance shutdown\nDefaultDependencies=no\nBefore=shutdown.target reboot.target halt.target\n[Service]\nType=oneshot\nExecStart=/bin/true\nExecStop=/opt/scripts/shutdown-script.sh\nRemainAfterExit=true\n[Install]\nWantedBy=multi-user.target'
 sudo systemctl daemon-reload
 sudo systemctl enable minecraft.service
+sudo systemctl enable shutdown-script.service
 sudo systemctl start minecraft.service
+sudo systemctl start shutdown-script.service
 
 # End script
